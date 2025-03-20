@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vibe audio player online</title>
+    <style>
+        body { font-family: Arial, sans-serif; text-align: center; margin: 20px; }
+        input { padding: 10px; width: 80%; margin-bottom: 10px; border: 1px solid #ccc; }
+        .song-list { list-style: none; padding: 0; }
+        .song-list li { cursor: pointer; padding: 10px; border-bottom: 1px solid #ddd; }
+        .song-list li:hover { background: #f0f0f0; }
+
+        /* Floating Player */
+        .player-container {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.8);
+            padding: 10px;
+            border-radius: 10px;
+            box-shadow: 0px 4px 8px rgba(0, 0, 0, 0.3);
+            display: none;
+            transition: opacity 0.3s;
+        }
+        .player-container:hover {
+            opacity: 1;
+        }
+        .controls {
+            margin-top: 10px;
+        }
+        .control-btn {
+            padding: 5px 15px;
+            margin: 0 5px;
+            cursor: pointer;
+            background-color: #444;
+            color: white;
+            border: none;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+
+    <h2>Enjoy with vibe audio player</h2>
+    <input type="text" id="search" placeholder="Search music..." onkeyup="searchOnlineMusic()">
+    
+    <ul id="songList" class="song-list"></ul>
+
+    <!-- Floating Audio Player -->
+    <div class="player-container" id="playerContainer">
+        <audio id="audioPlayer" controls style="width: 300px;"></audio>
+        <div class="controls">
+            <button class="control-btn" id="rewindBtn">Rewind</button>
+        </div>
+    </div>
+
+    <h3>Playlist</h3>
+    <ul id="playlist" class="song-list"></ul>
+
+    <script>
+        let currentPlaylist = [];
+        let currentSongIndex = -1;
+        let hideTimeout;
+
+        async function searchOnlineMusic() {
+            let query = document.getElementById("search").value;
+            if (query.length < 3) return;
+
+            const apiUrl = `https://archive.org/advancedsearch.php?q=${query}+AND+mediatype%3Aaudio&fl%5B%5D=title&fl%5B%5D=creator&fl%5B%5D=identifier&fl%5B%5D=collection&output=json`;
+
+            try {
+                let response = await fetch(apiUrl);
+                let data = await response.json();
+                let results = data.response.docs;
+
+                let songs = results.map(song => ({
+                    title: song.title,
+                    artist: song.creator || "Unknown Artist",
+                    identifier: song.identifier,
+                    album: song.collection || "Unknown Album"
+                }));
+
+                displaySongs(songs);
+            } catch (error) {
+                console.error("Error fetching songs:", error);
+            }
+        }
+
+        function displaySongs(songArray) {
+            const list = document.getElementById("songList");
+            list.innerHTML = "";
+            songArray.forEach((song, index) => {
+                let li = document.createElement("li");
+                li.textContent = `${song.title} - ${song.artist} (${song.album})`;
+                li.onclick = () => fetchAudioFile(song.identifier, index);
+                list.appendChild(li);
+            });
+
+            // Update Playlist
+            updatePlaylist(songArray);
+        }
+
+        function updatePlaylist(songs) {
+            const playlist = document.getElementById("playlist");
+            playlist.innerHTML = "";
+            currentPlaylist = songs;
+            currentPlaylist.forEach((song, index) => {
+                let li = document.createElement("li");
+                li.textContent = `${song.title} - ${song.artist}`;
+                li.onclick = () => fetchAudioFile(song.identifier, index);
+                playlist.appendChild(li);
+            });
+        }
+
+        async function fetchAudioFile(identifier, songIndex) {
+            const url = `https://archive.org/metadata/${identifier}`;
+            try {
+                let response = await fetch(url);
+                let data = await response.json();
+                let files = data.files;
+
+                // Find the first available MP3 file
+                let audioFile = files.find(file => file.format.includes("MP3"));
+                if (audioFile) {
+                    playSong(`https://archive.org/download/${identifier}/${audioFile.name}`, songIndex);
+                } else {
+                    alert("No playable audio found!");
+                }
+            } catch (error) {
+                console.error("Error fetching audio file:", error);
+            }
+        }
+
+        function playSong(url, songIndex) {
+            let player = document.getElementById("audioPlayer");
+            let playerContainer = document.getElementById("playerContainer");
+            
+            player.src = url;
+            player.play();
+            currentSongIndex = songIndex;
+            
+            playerContainer.style.display = "block";
+            playerContainer.style.opacity = "1";
+
+            resetHideTimer();
+        }
+
+        function resetHideTimer() {
+            clearTimeout(hideTimeout);
+            hideTimeout = setTimeout(() => {
+                document.getElementById("playerContainer").style.opacity = "0";
+            }, 3000);
+        }
+
+        document.getElementById("playerContainer").addEventListener("mouseenter", () => {
+            clearTimeout(hideTimeout);
+            document.getElementById("playerContainer").style.opacity = "1";
+        });
+
+        document.getElementById("playerContainer").addEventListener("mouseleave", resetHideTimer);
+
+        document.getElementById("rewindBtn").addEventListener("click", () => {
+            let player = document.getElementById("audioPlayer");
+            player.currentTime = 0; // Rewind to the beginning
+        });
+    </script>
+
+</body>
+</html>
